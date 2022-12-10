@@ -1,4 +1,11 @@
 {
+  "hosting": [
+    {
+      "target": "app",
+      "public": "packages/app/out",
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+    }
+  ],
   "functions": [
     {
       "source": "packages/functions",
