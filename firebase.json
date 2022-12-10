@@ -3,7 +3,27 @@
     {
       "target": "app",
       "public": "packages/app/out",
-      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+      "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+      "headers": [
+        {
+          "source": "**",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-store, no-cache"
+            }
+          ]
+        },
+        {
+          "source": "**/*.@(js)",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "max-age=31536000"
+            }
+          ]
+        }
+      ]
     }
   ],
   "functions": [
