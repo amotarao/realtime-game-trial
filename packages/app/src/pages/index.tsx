@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { doc, getFirestore, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, getFirestore, onSnapshot, setDoc, updateDoc } from 'firebase/firestore';
 import Head from 'next/head';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyB9Q4MInEqTU_JYL3ZQ_Gx9biZ8UcM1kWw',
@@ -26,6 +26,7 @@ export default function Home() {
 }
 
 const Game: React.FC = () => {
+  const dot = 12;
   const targetDoc = useMemo(() => doc(firestore, 'games', 'trial'), []);
   const [color, setColor] = useState('#000000');
   const [colorMap, setColorMap] = useState<Record<string, string>>({});
@@ -33,7 +34,12 @@ const Game: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onSnapshot(targetDoc, (snapshot) => {
-      const colorMap = snapshot.get('colorMap') as Record<string, string>;
+      if (!snapshot.exists()) {
+        setDoc(targetDoc, { colorMap: {} }, { merge: true });
+        return;
+      }
+
+      const colorMap = snapshot.get('colorMap') as Record<string, string> | undefined;
       setColorMap(colorMap || {});
       setLocalColorMap(colorMap || {});
     });
@@ -41,42 +47,90 @@ const Game: React.FC = () => {
     return () => {
       unsubscribe();
     };
-  });
+  }, [targetDoc]);
+
+  const getPosition = useCallback((index: number) => {
+    const x = index % dot;
+    const y = Math.floor(index / dot);
+    return { x, y };
+  }, []);
+
+  const getCurrentColor = useCallback(
+    (x: number, y: number) => {
+      const key = `${x}_${y}`;
+      const currentColor = localColorMap[key];
+      return currentColor;
+    },
+    [localColorMap]
+  );
+
+  const pushColor = useCallback(
+    (index: number, color: string) => {
+      const { x, y } = getPosition(index);
+      const key = `${x}_${y}`;
+      const currentColor = getCurrentColor(x, y);
+
+      if (color === currentColor) {
+        return;
+      }
+
+      setLocalColorMap((colorMap) => {
+        colorMap[key] = color;
+        return colorMap;
+      });
+      updateDoc(targetDoc, {
+        [`colorMap.${key}`]: color,
+      });
+    },
+    [targetDoc, getPosition, getCurrentColor]
+  );
 
   return (
-    <section className="grid grid-cols-1 gap-[40px] py-[20px]">
-      <div className="mx-auto grid h-[322px] w-[322px] grid-cols-[repeat(32,1fr)] grid-rows-[repeat(32,1fr)] border">
-        {[...Array(32 * 32)].map((_, i) => {
-          const x = i % 32;
-          const y = Math.floor(i / 32);
-          const key = `${x}_${y}`;
+    <section className="grid grid-cols-1 gap-[20px] py-[20px]">
+      <div
+        className="mx-auto grid h-[320px] w-[320px] grid-cols-[repeat(var(--dot),1fr)] grid-rows-[repeat(var(--dot),1fr)] shadow [&>div]:h-full [&>div]:w-full [&>div]:bg-[var(--color)]"
+        style={
+          {
+            '--dot': dot,
+          } as React.CSSProperties
+        }
+        onClick={(e) => {
+          const i = Array.from(e.currentTarget.childNodes).findIndex((elm) => elm === e.target);
+          pushColor(i, color);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          const i = Array.from(e.currentTarget.childNodes).findIndex((elm) => elm === e.target);
+          pushColor(i, 'transparent');
+        }}
+      >
+        {[...Array(dot * dot)].map((_, i) => {
+          const { x, y } = getPosition(i);
+          const currentColor = getCurrentColor(x, y);
 
           return (
             <div
-              key={key}
-              className="h-full w-full"
-              style={{
-                backgroundColor: localColorMap[key] || 'transparent',
-              }}
-              onClick={(e) => {
-                localColorMap[key] = color;
-                updateDoc(targetDoc, {
-                  [`colorMap.${key}`]: color,
-                });
-              }}
-            ></div>
+              key={i}
+              style={
+                {
+                  '--color': currentColor || 'transparent',
+                } as React.CSSProperties
+              }
+            />
           );
         })}
       </div>
-      <div className="mx-auto w-[322px]">
-        <input
-          className="h-[80px] w-[80px]"
-          type="color"
-          value={color}
-          onChange={(e) => {
-            setColor(e.currentTarget.value);
-          }}
-        />
+      <div className="mx-auto w-[320px]">
+        <div className="shadow">
+          <input
+            className="block h-[80px] w-full [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-0"
+            type="color"
+            value={color}
+            onChange={(e) => {
+              setColor(e.currentTarget.value);
+            }}
+          />
+        </div>
       </div>
     </section>
   );
